@@ -45,7 +45,7 @@ function MapEventListener() {
 
   useEffect(() => {
     if (!map || !isLoaded) return;
-    
+
     const handleClick = (e) => {
       console.log("Clicked at:", e.lngLat);
     };
@@ -71,7 +71,7 @@ export default function AdvancedPage() {
     <DocsLayout
       title="Advanced"
       description="Access the underlying MapLibre GL instance for advanced customization."
-      prev={{ title: "Clusters", href: "/docs/clusters" }}
+      prev={{ title: "Wayfarer", href: "/docs/wayfarer" }}
       toc={[
         { title: "Using a Ref", slug: "using-a-ref" },
         { title: "Using the Hook", slug: "using-the-hook" },

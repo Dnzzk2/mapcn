@@ -27,6 +27,21 @@
           }
         }
       }
+    },
+    {
+      "name": "wayfarer",
+      "type": "registry:ui",
+      "title": "Wayfarer",
+      "description": "Scroll-driven map storytelling component with smooth camera following and progress visualization.",
+      "dependencies": [],
+      "registryDependencies": ["map"],
+      "files": [
+        {
+          "path": "src/registry/wayfarer.tsx",
+          "type": "registry:ui",
+          "target": "components/ui/wayfarer.tsx"
+        }
+      ]
     }
   ]
 }

@@ -16,47 +16,131 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "site-url-here";
 
 const installCode = `npx shadcn@latest add ${siteUrl}/r/wayfarer`;
 
-const usageCode = `import { Map } from "@/components/ui/map";
+const usageCode = `import { useEffect, useRef, useState } from "react";
+import { Map, MapMarker, MarkerContent } from "@/components/ui/map";
 import {
   MapWayfarer,
   WayfarerSection,
-  useWayfarerScroll
+  useMapWayfarer,
+  useWayfarer,
+  type WayfarerData,
 } from "@/components/ui/wayfarer";
 
-const data = {
-  line: [[-122.41, 37.77], [-118.24, 34.05], [-117.16, 32.71]],
-  stops: [
-    { id: "sf", coordinates: [-122.41, 37.77], zoom: 12 },
-    { id: "la", coordinates: [-118.24, 34.05], zoom: 12 },
-    { id: "sd", coordinates: [-117.16, 32.71], zoom: 12 },
-  ],
-};
-
 function TravelStory() {
-  const scrollRef = useRef(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [data, setData] = useState<WayfarerData | null>(null);
 
-  const { segmentIndex, progress } = useWayfarerScroll({
+  // Fetch route data from API (recommended for large datasets)
+  useEffect(() => {
+    fetch("/api/route")
+      .then((res) => res.json())
+      .then(setData);
+  }, []);
+
+  if (!data) return <LoadingSpinner />;
+
+  return <TravelMap data={data} scrollRef={scrollRef} />;
+}
+
+function TravelMap({
+  data,
+  scrollRef,
+}: {
+  data: WayfarerData;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  // useMapWayfarer = useWayfarerScroll + auto prop binding
+  const {
+    wayfarerProps,   // spread onto <MapWayfarer>
+    currentStop,     // current stop data
+    nextStop,        // next stop data
+    segmentIndex,    // current segment (-1 = before first)
+    progress,        // 0-1 within segment
+    sectionZoom,     // zoom override from <WayfarerSection>
+    sectionCenter,   // center override from <WayfarerSection>
+  } = useMapWayfarer({
     data,
     scrollContainerRef: scrollRef,
+    triggerRatio: 0.3,  // trigger line at 30% from top
   });
 
   return (
     <div className="flex h-screen">
       <div className="w-1/2 h-full">
-        <Map>
+        <Map center={[-119.5, 35.5]} zoom={6}>
           <MapWayfarer
-            data={data}
-            segmentIndex={segmentIndex}
-            progress={progress}
-          />
+            {...wayfarerProps}
+            // Route line styling
+            routeColor="#94a3b8"
+            routeWidth={3}
+            routeOpacity={0.4}
+            routeDashArray={[4, 4]}
+            // Progress line styling
+            progressColor="#3b82f6"
+            progressWidth={4}
+            // Camera behavior
+            autoZoom
+            damping={0.12}
+            followCamera
+            padding={80}
+            // Built-in stop dots (or use custom markers below)
+            showStops
+            stopColor="#ef4444"
+            stopRadius={6}
+          >
+            {/* Custom markers via children */}
+            {data.stops.map((stop, i) => (
+              <MapMarker key={stop.id} longitude={stop.coordinates[0]} latitude={stop.coordinates[1]}>
+                <MarkerContent>
+                  <div className="size-6 rounded-full bg-blue-500 text-white text-xs font-bold
+                    flex items-center justify-center border-2 border-white shadow-lg">
+                    {i + 1}
+                  </div>
+                </MarkerContent>
+              </MapMarker>
+            ))}
+
+            {/* Child components can use useWayfarer() */}
+            <ProgressIndicator />
+          </MapWayfarer>
         </Map>
       </div>
 
       <div ref={scrollRef} className="w-1/2 h-full overflow-y-auto">
-        <WayfarerSection id="sf">San Francisco</WayfarerSection>
-        <WayfarerSection id="la">Los Angeles</WayfarerSection>
-        <WayfarerSection id="sd">San Diego</WayfarerSection>
+        {/* Normal section — camera follows the route */}
+        <WayfarerSection id="sf" className="min-h-screen p-8">
+          <h2>San Francisco</h2>
+          <p>Starting point of our journey...</p>
+        </WayfarerSection>
+
+        <WayfarerSection id="slo" className="min-h-screen p-8">
+          <h2>San Luis Obispo</h2>
+        </WayfarerSection>
+
+        {/* Override zoom/center — camera jumps to a specific view */}
+        <WayfarerSection
+          id="la"
+          className="min-h-screen p-8"
+          zoom={14}
+          center={[-118.2668, 34.0407]}  // zoom into Downtown LA
+        >
+          <h2>Downtown Los Angeles Close-up</h2>
+        </WayfarerSection>
+
+        <WayfarerSection id="sd" className="min-h-screen p-8">
+          <h2>San Diego</h2>
+        </WayfarerSection>
       </div>
+    </div>
+  );
+}
+
+// Child component using useWayfarer() context hook
+function ProgressIndicator() {
+  const { segmentIndex, progress } = useWayfarer();
+  return (
+    <div className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
+      Segment {segmentIndex} — {(progress * 100).toFixed(0)}%
     </div>
   );
 }`;
@@ -79,6 +163,7 @@ export default function WayfarerPage() {
       toc={[
         { title: "Installation", slug: "installation" },
         { title: "Usage", slug: "usage" },
+        { title: "useMapWayfarer", slug: "usemapwayfarer" },
         { title: "useWayfarerScroll", slug: "usewayfarerscroll" },
         { title: "MapWayfarer", slug: "mapwayfarer" },
         { title: "WayfarerSection", slug: "wayfarersection" },
@@ -93,10 +178,11 @@ export default function WayfarerPage() {
           animates camera transitions.
         </p>
         <p>
-          This component is designed for <strong>long-form scrollable content</strong>,
-          such as travel journals, guided tours, or route narratives. The scroll
-          position determines which section is active and how far along the route
-          the user has progressed.
+          This component is designed for{" "}
+          <strong>long-form scrollable content</strong>, such as travel
+          journals, guided tours, or route narratives. The scroll position
+          determines which section is active and how far along the route the
+          user has progressed.
         </p>
       </DocsSection>
 
@@ -110,13 +196,11 @@ export default function WayfarerPage() {
       </DocsSection>
 
       <DocsSection title="Usage">
-        <p>
-          The Wayfarer system consists of three main parts:
-        </p>
+        <p>The Wayfarer system consists of three main parts:</p>
         <ul>
           <li>
-            <DocsCode>useWayfarerScroll</DocsCode> — Hook that tracks scroll
-            progress
+            <DocsCode>useMapWayfarer</DocsCode> — Convenience hook that tracks
+            scroll progress and returns props for MapWayfarer
           </li>
           <li>
             <DocsCode>MapWayfarer</DocsCode> — Component that renders the route
@@ -130,7 +214,7 @@ export default function WayfarerPage() {
         <CodeBlock code={usageCode} />
       </DocsSection>
 
-      <ComponentPreview code={wayfarerSource} >
+      <ComponentPreview code={wayfarerSource}>
         <WayfarerExample />
       </ComponentPreview>
 
@@ -140,10 +224,56 @@ export default function WayfarerPage() {
         user continues scrolling.
       </DocsNote>
 
+      <DocsSection title="useMapWayfarer">
+        <p>
+          Convenience hook that combines scroll tracking with prop binding.
+          Returns a <DocsCode>wayfarerProps</DocsCode> object that can be spread
+          directly onto <DocsCode>MapWayfarer</DocsCode>, eliminating manual
+          prop passing.
+        </p>
+
+        <h4 className="font-medium mt-6 mb-2">Options</h4>
+        <p className="text-sm text-muted-foreground mb-2">
+          Same options as <DocsCode>useWayfarerScroll</DocsCode> below.
+        </p>
+
+        <h4 className="font-medium mt-6 mb-2">Returns</h4>
+        <DocsPropTable
+          props={[
+            {
+              name: "wayfarerProps",
+              type: "{ data, segmentIndex, progress }",
+              description: "Props object to spread onto MapWayfarer.",
+            },
+            {
+              name: "segmentIndex",
+              type: "number",
+              description: "Current segment index (-1 = before first section).",
+            },
+            {
+              name: "progress",
+              type: "number",
+              description: "Progress within current segment (0-1).",
+            },
+            {
+              name: "currentStop",
+              type: "WayfarerStop | null",
+              description: "Current stop data.",
+            },
+            {
+              name: "nextStop",
+              type: "WayfarerStop | null",
+              description: "Next stop data.",
+            },
+          ]}
+        />
+      </DocsSection>
+
       <DocsSection title="useWayfarerScroll">
         <p>
-          Hook that monitors scroll position and calculates which section is
-          currently active.
+          Lower-level hook that monitors scroll position and calculates which
+          section is currently active. Use this if you need more control;
+          otherwise prefer <DocsCode>useMapWayfarer</DocsCode>.
         </p>
 
         <h4 className="font-medium mt-6 mb-2">Options</h4>
@@ -171,8 +301,7 @@ export default function WayfarerPage() {
               name: "triggerRatio",
               type: "number",
               default: "0.2",
-              description:
-                "Position of trigger line as ratio from top (0-1).",
+              description: "Position of trigger line as ratio from top (0-1).",
             },
           ]}
         />
@@ -183,8 +312,7 @@ export default function WayfarerPage() {
             {
               name: "segmentIndex",
               type: "number",
-              description:
-                "Current segment index (-1 = before first section).",
+              description: "Current segment index (-1 = before first section).",
             },
             {
               name: "progress",
@@ -335,12 +463,14 @@ export default function WayfarerPage() {
             {
               name: "zoom",
               type: "number",
-              description: "Override zoom level for this section.",
+              description:
+                "Override camera zoom level when this section is active.",
             },
             {
               name: "center",
               type: "[number, number]",
-              description: "Override center point for this section.",
+              description:
+                "Override camera center [lng, lat] when this section is active.",
             },
           ]}
         />

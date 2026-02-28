@@ -55,7 +55,8 @@ interface ParsedWayfarerData extends WayfarerData {
 
 /** Calculate approximate distance between two coordinates */
 function getDistance(p1: [number, number], p2: [number, number]): number {
-  const dx = (p2[0] - p1[0]) * Math.cos(((p1[1] + p2[1]) / 2) * (Math.PI / 180));
+  const dx =
+    (p2[0] - p1[0]) * Math.cos(((p1[1] + p2[1]) / 2) * (Math.PI / 180));
   const dy = p2[1] - p1[1];
   return Math.sqrt(dx * dx + dy * dy);
 }
@@ -63,7 +64,11 @@ function getDistance(p1: [number, number], p2: [number, number]): number {
 /** Compute path metadata: cumulative distances and stop projections */
 function computePathMetadata(data: WayfarerData): ParsedWayfarerData {
   if (data.line.length < 2) {
-    return { ...data, pathDistances: [0], stopDistances: data.stops.map(() => 0) };
+    return {
+      ...data,
+      pathDistances: [0],
+      stopDistances: data.stops.map(() => 0),
+    };
   }
 
   const line = data.line;
@@ -94,9 +99,12 @@ function computePathMetadata(data: WayfarerData): ParsedWayfarerData {
       if (segLen === 0) continue;
 
       // Project point onto segment
-      const dx = (p2[0] - p1[0]) * Math.cos(((p1[1] + p2[1]) / 2) * (Math.PI / 180));
+      const dx =
+        (p2[0] - p1[0]) * Math.cos(((p1[1] + p2[1]) / 2) * (Math.PI / 180));
       const dy = p2[1] - p1[1];
-      const pdx = (coord[0] - p1[0]) * Math.cos(((p1[1] + coord[1]) / 2) * (Math.PI / 180));
+      const pdx =
+        (coord[0] - p1[0]) *
+        Math.cos(((p1[1] + coord[1]) / 2) * (Math.PI / 180));
       const pdy = coord[1] - p1[1];
       const dot = pdx * dx + pdy * dy;
       const t = Math.max(0, Math.min(1, dot / (dx * dx + dy * dy)));
@@ -107,7 +115,8 @@ function computePathMetadata(data: WayfarerData): ParsedWayfarerData {
 
       if (distToLine < minDist) {
         minDist = distToLine;
-        bestDistOnPath = pathDistances[i] + t * (pathDistances[i + 1] - pathDistances[i]);
+        bestDistOnPath =
+          pathDistances[i] + t * (pathDistances[i + 1] - pathDistances[i]);
         bestSegIndex = i;
       }
     }
@@ -123,7 +132,7 @@ function computePathMetadata(data: WayfarerData): ParsedWayfarerData {
 function getProgressCoordinates(
   data: ParsedWayfarerData,
   segmentIndex: number,
-  progress: number
+  progress: number,
 ): [number, number][] {
   if (segmentIndex < 0) return [];
 
@@ -131,7 +140,8 @@ function getProgressCoordinates(
 
   // Calculate target distance
   const startDist = stopDistances[segmentIndex] ?? 0;
-  const endDist = stopDistances[segmentIndex + 1] ?? pathDistances[pathDistances.length - 1];
+  const endDist =
+    stopDistances[segmentIndex + 1] ?? pathDistances[pathDistances.length - 1];
   const targetDist = startDist + (endDist - startDist) * progress;
 
   // Build coordinates up to target
@@ -158,7 +168,10 @@ function getProgressCoordinates(
   const segLen = segEndDist - segStartDist;
 
   if (segLen > 0) {
-    const fraction = Math.max(0, Math.min(1, (targetDist - segStartDist) / segLen));
+    const fraction = Math.max(
+      0,
+      Math.min(1, (targetDist - segStartDist) / segLen),
+    );
     const p1 = line[splitIndex];
     const p2 = line[splitIndex + 1];
     if (p2) {
@@ -173,7 +186,9 @@ function getProgressCoordinates(
 }
 
 /** Calculate bounds for a set of coordinates */
-function getBounds(coordinates: [number, number][]): [[number, number], [number, number]] | null {
+function getBounds(
+  coordinates: [number, number][],
+): [[number, number], [number, number]] | null {
   if (coordinates.length === 0) return null;
 
   let minLng = coordinates[0][0];
@@ -188,16 +203,23 @@ function getBounds(coordinates: [number, number][]): [[number, number], [number,
     maxLat = Math.max(maxLat, lat);
   }
 
-  return [[minLng, minLat], [maxLng, maxLat]];
+  return [
+    [minLng, minLat],
+    [maxLng, maxLat],
+  ];
 }
 
 /** Get coordinates for a segment between two stops */
-function getSegmentCoordinates(data: ParsedWayfarerData, segmentIndex: number): [number, number][] {
+function getSegmentCoordinates(
+  data: ParsedWayfarerData,
+  segmentIndex: number,
+): [number, number][] {
   if (segmentIndex < 0 || segmentIndex >= data.stops.length) return [];
 
   const { line, pathDistances, stopDistances } = data;
   const startDist = stopDistances[segmentIndex];
-  const endDist = stopDistances[segmentIndex + 1] ?? pathDistances[pathDistances.length - 1];
+  const endDist =
+    stopDistances[segmentIndex + 1] ?? pathDistances[pathDistances.length - 1];
 
   const coords: [number, number][] = [];
 
@@ -237,6 +259,10 @@ interface UseWayfarerScrollResult {
   currentStop: WayfarerStop | null;
   /** Next stop data, or null if at last section */
   nextStop: WayfarerStop | null;
+  /** Zoom override from current WayfarerSection, if set */
+  sectionZoom: number | null;
+  /** Center override from current WayfarerSection, if set */
+  sectionCenter: [number, number] | null;
 }
 
 /**
@@ -259,6 +285,10 @@ function useWayfarerScroll({
 }: UseWayfarerScrollOptions): UseWayfarerScrollResult {
   const [segmentIndex, setSegmentIndex] = useState(-1);
   const [progress, setProgress] = useState(0);
+  const [sectionZoom, setSectionZoom] = useState<number | null>(null);
+  const [sectionCenter, setSectionCenter] = useState<[number, number] | null>(
+    null,
+  );
 
   useEffect(() => {
     const handleScroll = () => {
@@ -267,7 +297,7 @@ function useWayfarerScroll({
       // Determine the search root for sections
       const searchRoot = container ?? document;
       const sections = Array.from(
-        searchRoot.querySelectorAll<HTMLElement>(sectionSelector)
+        searchRoot.querySelectorAll<HTMLElement>(sectionSelector),
       );
 
       if (sections.length === 0) return;
@@ -316,6 +346,27 @@ function useWayfarerScroll({
 
       setSegmentIndex(currentIndex);
       setProgress(currentProgress);
+
+      // Read section-level zoom/center overrides from data attributes
+      const activeSection = currentIndex >= 0 ? sections[currentIndex] : null;
+      if (activeSection) {
+        const zoomAttr = activeSection.getAttribute("data-wayfarer-zoom");
+        setSectionZoom(zoomAttr ? Number(zoomAttr) : null);
+
+        const centerAttr = activeSection.getAttribute("data-wayfarer-center");
+        if (centerAttr) {
+          try {
+            setSectionCenter(JSON.parse(centerAttr) as [number, number]);
+          } catch {
+            setSectionCenter(null);
+          }
+        } else {
+          setSectionCenter(null);
+        }
+      } else {
+        setSectionZoom(null);
+        setSectionCenter(null);
+      }
     };
 
     // Determine scroll target
@@ -329,10 +380,70 @@ function useWayfarerScroll({
     };
   }, [scrollContainerRef, sectionSelector, triggerRatio]);
 
-  const currentStop = segmentIndex >= 0 ? data.stops[segmentIndex] ?? null : null;
-  const nextStop = segmentIndex >= 0 ? data.stops[segmentIndex + 1] ?? null : null;
+  const currentStop =
+    segmentIndex >= 0 ? (data.stops[segmentIndex] ?? null) : null;
+  const nextStop =
+    segmentIndex >= 0 ? (data.stops[segmentIndex + 1] ?? null) : null;
 
-  return { segmentIndex, progress, currentStop, nextStop };
+  return {
+    segmentIndex,
+    progress,
+    currentStop,
+    nextStop,
+    sectionZoom,
+    sectionCenter,
+  };
+}
+
+// ============================================================================
+// useMapWayfarer Convenience Hook
+// ============================================================================
+
+interface UseMapWayfarerResult extends UseWayfarerScrollResult {
+  /** Props object to spread directly onto MapWayfarer */
+  wayfarerProps: Pick<
+    MapWayfarerProps,
+    "data" | "segmentIndex" | "progress" | "sectionZoom" | "sectionCenter"
+  >;
+}
+
+/**
+ * Convenience hook that combines useWayfarerScroll with prop binding.
+ *
+ * Eliminates the need to manually pass segmentIndex and progress to MapWayfarer.
+ *
+ * @example
+ * ```tsx
+ * const { wayfarerProps, currentStop } = useMapWayfarer({ data, scrollContainerRef });
+ *
+ * <Map>
+ *   <MapWayfarer {...wayfarerProps} />
+ * </Map>
+ * ```
+ */
+function useMapWayfarer(
+  options: UseWayfarerScrollOptions,
+): UseMapWayfarerResult {
+  const scrollResult = useWayfarerScroll(options);
+
+  const wayfarerProps = useMemo(
+    () => ({
+      data: options.data,
+      segmentIndex: scrollResult.segmentIndex,
+      progress: scrollResult.progress,
+      sectionZoom: scrollResult.sectionZoom,
+      sectionCenter: scrollResult.sectionCenter,
+    }),
+    [
+      options.data,
+      scrollResult.segmentIndex,
+      scrollResult.progress,
+      scrollResult.sectionZoom,
+      scrollResult.sectionCenter,
+    ],
+  );
+
+  return { ...scrollResult, wayfarerProps };
 }
 
 // ============================================================================
@@ -367,6 +478,10 @@ interface MapWayfarerProps {
   segmentIndex: number;
   /** Progress within current segment (0-1) from useWayfarerScroll */
   progress: number;
+  /** Zoom override from current WayfarerSection */
+  sectionZoom?: number | null;
+  /** Center override from current WayfarerSection */
+  sectionCenter?: [number, number] | null;
   /** Auto-calculate zoom to fit route segments. Default: true */
   autoZoom?: boolean;
   /** Camera movement damping (0-1). Lower = smoother. Default: 0.15 */
@@ -374,7 +489,9 @@ interface MapWayfarerProps {
   /** Whether camera should follow progress. Default: true */
   followCamera?: boolean;
   /** Padding for auto-zoom bounds calculation. Default: 50 */
-  padding?: number | { top: number; bottom: number; left: number; right: number };
+  padding?:
+    | number
+    | { top: number; bottom: number; left: number; right: number };
   /** Color of the full route line. Default: "#a3a3a3" (dark: "#737373") */
   routeColor?: string;
   /** Width of the full route line. Default: 3 */
@@ -425,6 +542,8 @@ function MapWayfarer({
   data,
   segmentIndex,
   progress,
+  sectionZoom,
+  sectionCenter,
   autoZoom = true,
   damping = 0.15,
   followCamera = true,
@@ -473,7 +592,9 @@ function MapWayfarer({
     if (document.documentElement.classList.contains("dark")) return "dark";
     if (document.documentElement.classList.contains("light")) return "light";
     if (typeof window !== "undefined") {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
     }
     return "light";
   });
@@ -495,7 +616,8 @@ function MapWayfarer({
     // Also watch for system preference changes
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleSystemChange = (e: MediaQueryListEvent) => {
-      const docHasClass = document.documentElement.classList.contains("dark") ||
+      const docHasClass =
+        document.documentElement.classList.contains("dark") ||
         document.documentElement.classList.contains("light");
       if (!docHasClass) {
         setResolvedTheme(e.matches ? "dark" : "light");
@@ -513,24 +635,31 @@ function MapWayfarer({
 
   // Resolve colors - route uses #94a3b8 (slate-400) like Route Planning example
   const resolvedRouteColor = routeColor ?? "#94a3b8";
-  const resolvedProgressColor = progressColor ?? (isDark ? "#60a5fa" : "#3b82f6");
+  const resolvedProgressColor =
+    progressColor ?? (isDark ? "#60a5fa" : "#3b82f6");
   const resolvedStopColor = stopColor ?? (isDark ? "#f87171" : "#ef4444");
 
   // Calculate best zoom for a segment
-  const calculateBestZoom = useCallback((mapInstance: MapLibreGL.Map, segIdx: number): number => {
-    const coords = getSegmentCoordinates(parsedData, segIdx);
-    if (coords.length === 0) return 14;
+  const calculateBestZoom = useCallback(
+    (mapInstance: MapLibreGL.Map, segIdx: number): number => {
+      const coords = getSegmentCoordinates(parsedData, segIdx);
+      if (coords.length === 0) return 14;
 
-    const bounds = getBounds(coords);
-    if (!bounds) return 14;
+      const bounds = getBounds(coords);
+      if (!bounds) return 14;
 
-    const paddingValue = typeof padding === "number"
-      ? { top: padding, bottom: padding, left: padding, right: padding }
-      : padding;
+      const paddingValue =
+        typeof padding === "number"
+          ? { top: padding, bottom: padding, left: padding, right: padding }
+          : padding;
 
-    const camera = mapInstance.cameraForBounds(bounds, { padding: paddingValue });
-    return Math.max(10, Math.min(camera?.zoom ?? 12, 16));
-  }, [parsedData, padding]);
+      const camera = mapInstance.cameraForBounds(bounds, {
+        padding: paddingValue,
+      });
+      return Math.max(10, Math.min(camera?.zoom ?? 12, 16));
+    },
+    [parsedData, padding],
+  );
 
   // Add layers on mount
   useEffect(() => {
@@ -634,7 +763,9 @@ function MapWayfarer({
   useEffect(() => {
     if (!isLoaded || !map) return;
 
-    const routeSource = map.getSource(routeSourceId) as MapLibreGL.GeoJSONSource;
+    const routeSource = map.getSource(
+      routeSourceId,
+    ) as MapLibreGL.GeoJSONSource;
     if (routeSource) {
       routeSource.setData({
         type: "Feature",
@@ -700,7 +831,11 @@ function MapWayfarer({
         const dLat = tCenter[1] - currentCenterRef.current[1];
         const dZoom = tZoom - currentZoomRef.current;
 
-        if (Math.abs(dLng) > EPSILON || Math.abs(dLat) > EPSILON || Math.abs(dZoom) > EPSILON) {
+        if (
+          Math.abs(dLng) > EPSILON ||
+          Math.abs(dLat) > EPSILON ||
+          Math.abs(dZoom) > EPSILON
+        ) {
           const newLng = currentCenterRef.current[0] + dLng * damping;
           const newLat = currentCenterRef.current[1] + dLat * damping;
           const newZoom = currentZoomRef.current + dZoom * damping;
@@ -732,8 +867,14 @@ function MapWayfarer({
     if (!isLoaded || !map) return;
 
     // Update progress line
-    const progressCoords = getProgressCoordinates(parsedData, segmentIndex, progress);
-    const progressSource = map.getSource(progressSourceId) as MapLibreGL.GeoJSONSource;
+    const progressCoords = getProgressCoordinates(
+      parsedData,
+      segmentIndex,
+      progress,
+    );
+    const progressSource = map.getSource(
+      progressSourceId,
+    ) as MapLibreGL.GeoJSONSource;
     if (progressSource) {
       progressSource.setData({
         type: "Feature",
@@ -747,43 +888,52 @@ function MapWayfarer({
 
     // Calculate camera target
     if (followCamera) {
-      // Resume following if target changed
-      if (targetCenterRef.current) {
-        const newCenter = progressCoords.length > 0
-          ? progressCoords[progressCoords.length - 1]
-          : parsedData.stops[0]?.coordinates ?? parsedData.line[0];
+      // Determine effective center: section override > progress head > initial
+      let effectiveCenter: [number, number] | undefined;
 
-        if (newCenter) {
-          const dLng = Math.abs(targetCenterRef.current[0] - newCenter[0]);
-          const dLat = Math.abs(targetCenterRef.current[1] - newCenter[1]);
-          if (dLng > 0.000001 || dLat > 0.000001) {
-            isUserInteractingRef.current = false;
-          }
+      if (sectionCenter) {
+        // Section-level center override takes priority
+        effectiveCenter = sectionCenter;
+      } else if (progressCoords.length > 0) {
+        effectiveCenter = progressCoords[progressCoords.length - 1];
+      } else if (segmentIndex < 0) {
+        effectiveCenter =
+          parsedData.stops[0]?.coordinates ?? parsedData.line[0];
+      }
+
+      // Resume following if target changed
+      if (targetCenterRef.current && effectiveCenter) {
+        const dLng = Math.abs(targetCenterRef.current[0] - effectiveCenter[0]);
+        const dLat = Math.abs(targetCenterRef.current[1] - effectiveCenter[1]);
+        if (dLng > 0.000001 || dLat > 0.000001) {
+          isUserInteractingRef.current = false;
         }
       }
 
-      // Set target center (follow progress head)
-      if (progressCoords.length > 0) {
-        targetCenterRef.current = progressCoords[progressCoords.length - 1];
-      } else if (segmentIndex < 0) {
-        targetCenterRef.current = parsedData.stops[0]?.coordinates ?? parsedData.line[0];
+      // Set target center
+      if (effectiveCenter) {
+        targetCenterRef.current = effectiveCenter;
       }
 
-      // Set target zoom
-      if (autoZoom && segmentIndex >= 0) {
+      // Set target zoom: section override > stop zoom > auto-calculated
+      if (sectionZoom !== null && sectionZoom !== undefined) {
+        targetZoomRef.current = sectionZoom;
+      } else if (autoZoom && segmentIndex >= 0) {
         const currentStop = parsedData.stops[segmentIndex];
         const nextStop = parsedData.stops[segmentIndex + 1];
 
         const zoomA = currentStop?.zoom ?? calculateBestZoom(map, segmentIndex);
-        const zoomB = nextStop?.zoom ?? (segmentIndex + 1 < parsedData.stops.length
-          ? calculateBestZoom(map, segmentIndex + 1)
-          : zoomA);
+        const zoomB =
+          nextStop?.zoom ??
+          (segmentIndex + 1 < parsedData.stops.length
+            ? calculateBestZoom(map, segmentIndex + 1)
+            : zoomA);
 
         targetZoomRef.current = zoomA + (zoomB - zoomA) * progress;
       } else if (segmentIndex < 0) {
         targetZoomRef.current = autoZoom
           ? calculateBestZoom(map, 0)
-          : parsedData.stops[0]?.zoom ?? 12;
+          : (parsedData.stops[0]?.zoom ?? 12);
       }
     }
 
@@ -798,12 +948,14 @@ function MapWayfarer({
     followCamera,
     autoZoom,
     calculateBestZoom,
+    sectionZoom,
+    sectionCenter,
   ]);
 
   // Context value for children
   const contextValue = useMemo(
     () => ({ data: parsedData, segmentIndex, progress }),
-    [parsedData, segmentIndex, progress]
+    [parsedData, segmentIndex, progress],
   );
 
   return (
@@ -824,9 +976,9 @@ interface WayfarerSectionProps extends React.HTMLAttributes<HTMLElement> {
   children: ReactNode;
   /** Additional CSS classes */
   className?: string;
-  /** Override zoom level for this section */
+  /** Override zoom level when this section is active */
   zoom?: number;
-  /** Override center point for this section */
+  /** Override camera center [lng, lat] when this section is active */
   center?: [number, number];
 }
 
@@ -836,11 +988,19 @@ interface WayfarerSectionProps extends React.HTMLAttributes<HTMLElement> {
  * Place these in your scrollable content area. Each section's id
  * should match a stop id in your WayfarerData.
  *
+ * Optionally override `zoom` and `center` to temporarily redirect
+ * the camera away from the route path for this section.
+ *
  * @example
  * ```tsx
  * <WayfarerSection id="paris" className="min-h-screen">
  *   <h1>Paris</h1>
  *   <p>The city of lights...</p>
+ * </WayfarerSection>
+ *
+ * // Override camera for a detour
+ * <WayfarerSection id="detour" zoom={14} center={[2.2945, 48.8584]}>
+ *   <h1>Eiffel Tower Close-up</h1>
  * </WayfarerSection>
  * ```
  */
@@ -873,6 +1033,7 @@ export {
   MapWayfarer,
   WayfarerSection,
   useWayfarerScroll,
+  useMapWayfarer,
   useWayfarer,
 };
 
@@ -883,4 +1044,5 @@ export type {
   WayfarerSectionProps,
   UseWayfarerScrollOptions,
   UseWayfarerScrollResult,
+  UseMapWayfarerResult,
 };
